@@ -1,12 +1,8 @@
 import numpy as np 
 import xarray as xr 
 import pandas as pd 
-import pickle as p
-import os
-import sys
-import re
 import argparse
-from read_locationfile import ReadLocationFile
+from oelsmann24_verticallandmotion.read_locationfile import ReadLocationFile
 from scipy.spatial import cKDTree
 from typing import Optional, Tuple
 from scipy.interpolate import interp1d
@@ -211,15 +207,17 @@ def temp_decay(years,start_year,period1=2050,period2=2150):
 
 
 def vlm_postprocess(
+    preprocess_dict: dict,
     nsamps,
     rng_seed,
-    locationfile,
+    location_file,
     baseyear,
     pyear_start,
     pyear_end,
     pyear_step,
     chunksize,
-    pipeline_id
+    pipeline_id,
+    output_lslr_file:str
 ):
     """
     Run the VLM post-processing to produce local sea-level change samples.
@@ -246,23 +244,23 @@ def vlm_postprocess(
     - `ReadLocationFile` must return a tuple (_, site_ids, site_lats, site_lons).
     """
     # Read in the data from the preprocessing stage
-    datafile = "{}_data.pkl".format(pipeline_id)
-    try:
-        f = open(datafile, 'rb')
-    except:
-        print("Cannot open datafile\n")
-        sys.exit(1)
+    #datafile = "{}_data.pkl".format(pipeline_id)
+    #try:
+    #    f = open(datafile, 'rb')
+    #except:
+    #    print("Cannot open datafile\n")
+    #    sys.exit(1)
 
     # Extract the data from the file
-    my_data = p.load(f)
-    GIA_VLM_int = my_data['GIA_VLM_int']
-    VLM_REC_MERGED = my_data['VLM_REC_MERGED']
-    VLM_REC_MERGED_GRW = my_data['VLM_REC_MERGED_GRW']
-    weights = my_data['weights']
-    f.close()
+    #my_data = p.load(f)
+    GIA_VLM_int = preprocess_dict['GIA_VLM_int']
+    VLM_REC_MERGED = preprocess_dict['VLM_REC_MERGED']
+    VLM_REC_MERGED_GRW = preprocess_dict['VLM_REC_MERGED_GRW']
+    weights = preprocess_dict['weights']
+    #f.close()
 
 
-    (_, site_ids, site_lats, site_lons) = ReadLocationFile(locationfile)
+    (_, site_ids, site_lats, site_lons) = ReadLocationFile(location_file)
 
 
     targyears = np.linspace(pyear_start,pyear_end,int((pyear_end-pyear_start)/pyear_step)+1)
@@ -295,9 +293,9 @@ def vlm_postprocess(
     GIA_VLM_int_rsl_mean_mapped_time = np.multiply.outer(years_mult,GIA_VLM_int_rsl_mean_mapped)
     GIA_VLM_int_rsl_sterr_mapped_time = np.multiply.outer(years_mult,GIA_VLM_int_rsl_sterr_mapped) 
 
-
     sample_shape = VLM_REC_trend_mapped_time.shape   # (H, W)
     SAMPLES = np.empty((nsamps,) + sample_shape, dtype=np.int16)#*np.nan
+    #SAMPLES = np.zeros((nsamps,) + sample_shape, dtype=np.int16)
 
     # Precompute / cast to float32 to reduce memory & speed up arithmetic
     VLM_REC_trend_mapped_time_ = VLM_REC_trend_mapped_time.astype(np.float32)
@@ -306,32 +304,25 @@ def vlm_postprocess(
     gia_sterr = GIA_VLM_int_rsl_sterr_mapped_time.astype(np.float32)
     grw = VLM_GRW_trend_un_mapped_interp.T.astype(np.float32)
     WEIGHTS_ = WEIGHTS.T.astype(np.float32)
-
     one_minus_weights = (WEIGHTS_ * -1.0) + 1.0   # shape (H, W)
-
     # Simple batch loop
     for start in range(0, nsamps, chunksize):
         end = min(start + chunksize, nsamps)
         b = end - start
-
         # shape (b, 1, 1) so broadcasting works with (H,W) arrays
         r1 = norm_inv_perm[start:end][:, None, None]
         r2 = norm_inv_perm2[start:end][:, None, None]
-
         # Broadcasted arithmetic -> shapes (b, H, W)
         VLM_obs_batch = WEIGHTS_[None, :, :] * ( VLM_REC_trend_mapped_time_[None, :, :] +
                                                 VLM_REC_trend_un_mapped_time_[None, :, :] * r1 +
                                                 grw[None, :, :] * r2 )
-
         # GIA_sample = (1 - WEIGHTS) * (gia_mean + gia_sterr*r1)
         GIA_batch = one_minus_weights[None, :, :] * ( gia_mean[None, :, :] +
                                                     gia_sterr[None, :, :] * r1 )
-
         # final samples: round then cast once
         VLM_batch = np.around(VLM_obs_batch + GIA_batch).astype(np.int16)
-
         SAMPLES[start:end, :, :] = VLM_batch
-        print(start)
+        #print(start)
 
 
     ncvar_attributes = {"description": "Global VLM contributions to RSL change according to Global vlm workflow",
@@ -345,9 +336,10 @@ def vlm_postprocess(
                             "lat": (("locations"), site_lats),
                             "lon": (("locations"), site_lons)},
         coords={"years": targyears, "locations": site_ids, "samples": np.arange(nsamps)}, attrs=ncvar_attributes)
-
     # Write the netcdf output file
-    vlm_out.to_netcdf("{0}_localsl.nc".format(pipeline_id), encoding={"sea_level_change": {"dtype": "f4", "zlib": True, "complevel":4, "_FillValue": nc_missing_value}})
+    vlm_out.to_netcdf(
+        output_lslr_file,
+        encoding={"sea_level_change": {"dtype": "f4", "zlib": True, "complevel":4, "_FillValue": nc_missing_value}})
     return(None)
 
 

@@ -1,15 +1,18 @@
 import numpy as np 
 import xarray as xr 
 import pandas as pd 
-import pickle as p
-import os
-import sys
-import re
+#import pickle as p
+#import os
+#import sys
+#import re
 import argparse
 from scipy.spatial import cKDTree
 from typing import Optional, Tuple
 import copy
+import logging
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 ''' vlm_preprocess.py
 
@@ -375,8 +378,9 @@ def regrid_from_flat(data_in,variables,lon_a,lat_a):
     ids_ = np.empty([len(data_in.lon.values)])*0
     i=0
 
-    for lond,latd in zip(data_in.lon.values,data_in.lat.values):    
-        ids_[i] = int(np.argwhere((xx==latd) & (yy==lond))   )
+    for lond,latd in zip(data_in.lon.values,data_in.lat.values):   
+        target = np.argwhere((xx==latd) & (yy==lond))
+        ids_[i] = int(target[0, 0])
         i=i+1
 
     variable = variables[0]
@@ -642,7 +646,13 @@ def interpolate_and_compute_weights(VLM_REC_MERGED,VLM_REC_MERGED_GRW,GIA_VLM,di
 
     return GIA_VLM_int,dis_sel_2d,dis_sel_2d_grw_use,w_d
 
-def load_datasets():
+def load_datasets(
+        input_vlm_reconstruction_file: str,
+        input_gps_vlm_file: str,
+        input_gia_vlm_file: str,
+        input_dist2coast_file: str,
+        input_example_file: str,
+):
     """
     Load required datasets
 
@@ -651,14 +661,35 @@ def load_datasets():
     (VLM_REC, GPS_VLM, GIA_VLM, dist2coast, example) : tuple of xr.Dataset
     """
 
-    VLM_REC      = xr.open_dataset(os.path.join(os.path.dirname(__file__), "data/VLM_reconstruction.nc"))
-    GPS_VLM      = xr.open_dataset(os.path.join(os.path.dirname(__file__), "data/NGL14_CMR_corrected.nc"))
-    GIA_VLM      = xr.open_dataset(os.path.join(os.path.dirname(__file__), "data/GIA_stats.nc"))
-    dist2coast   = xr.open_dataset(os.path.join(os.path.dirname(__file__), "data/dist2coast_1deg_v2.grd")).rename({'x':'lon','y':'lat'})
-    example      = xr.open_dataset(os.path.join(os.path.dirname(__file__), "data/ssp585.2150.fair2.emuGLA.emulandice2.glaciers_quantiles.nc"))
+    VLM_REC      = xr.open_dataset(
+        input_vlm_reconstruction_file,
+        #os.path.join(os.path.dirname(__file__), "data/VLM_reconstruction.nc")
+        )
+    GPS_VLM      = xr.open_dataset(
+        input_gps_vlm_file,
+        #os.path.join(os.path.dirname(__file__), "data/NGL14_CMR_corrected.nc")
+        )
+    GIA_VLM      = xr.open_dataset(
+        input_gia_vlm_file,
+        #os.path.join(os.path.dirname(__file__), "data/GIA_stats.nc")
+        )
+    dist2coast   = xr.open_dataset(
+        input_dist2coast_file,
+        #os.path.join(os.path.dirname(__file__), "data/dist2coast_1deg_v2.grd")
+        ).rename({'x':'lon','y':'lat'})
+    example      = xr.open_dataset(
+        input_example_file,
+        #os.path.join(os.path.dirname(__file__), "data/ssp585.2150.fair2.emuGLA.emulandice2.glaciers_quantiles.nc")
+        )
     return VLM_REC,GPS_VLM,GIA_VLM,dist2coast,example
 
-def global_preprocess_verticallandmotion(pipeline_id):
+def global_preprocess_verticallandmotion(
+        pipeline_id:str,
+        input_vlm_reconstruction_file: str,
+        input_gps_vlm_file: str,
+        input_gia_vlm_file: str,
+        input_dist2coast_file: str,
+        input_example_file: str,):
     """ Load, interpolate and combine datasets:
 
     VLM_REC: VLM reconstruction (Oelsmann et al., 2024)
@@ -679,7 +710,13 @@ def global_preprocess_verticallandmotion(pipeline_id):
     """
 
     # Load required datasets
-    VLM_REC,GPS_VLM,GIA_VLM,dist2coast,example = load_datasets()
+    VLM_REC,GPS_VLM,GIA_VLM,dist2coast,example = load_datasets(
+        input_vlm_reconstruction_file=input_vlm_reconstruction_file,
+        input_gps_vlm_file=input_gps_vlm_file,
+        input_gia_vlm_file=input_gia_vlm_file,
+        input_dist2coast_file=input_dist2coast_file,
+        input_example_file=input_example_file,
+    )
     # Merge GPS and the VLM reconstruction
     VLM_REC_MERGED,VLM_REC_MERGED_GRW = merge_gps_and_vlm_reconstruction(VLM_REC,GPS_VLM)
     # Interpolate 
@@ -689,12 +726,13 @@ def global_preprocess_verticallandmotion(pipeline_id):
     outdata = {'GIA_VLM_int': GIA_VLM_int, 'VLM_REC_MERGED': VLM_REC_MERGED, 'VLM_REC_MERGED_GRW': VLM_REC_MERGED_GRW, 'weights': weights, 'example':example}
     
     # Define the data directory
-    outdir = os.path.dirname(__file__)
+    #outdir = os.path.dirname(__file__)
 
     # Write the rates data to a pickle file
-    outfile = open(os.path.join(outdir, "{}_data.pkl".format(pipeline_id)), 'wb')
-    p.dump(outdata, outfile)
-    outfile.close()    
+    #outfile = open(os.path.join(outdir, "{}_data.pkl".format(pipeline_id)), 'wb')
+    #p.dump(outdata, outfile)
+    #outfile.close()    
+    return outdata
 
 
 
