@@ -18,6 +18,8 @@ git clone --single-branch --branch package git@github.com:e-marshall/oelsmann24-
 mkdir -p ./data/input
 curl -sL https://zenodo.org/records/18199757/files/oelsmann24_vlm_data.tar.gz | tar -zx -C ./data/input
 
+echo "New_York	12	40.70	-74.01" > ./data/input/location.lst
+
 #Make dir for output data 
 mkdir -p ./data/output
 ```
@@ -84,3 +86,25 @@ Options:
                                   projections file.  [required]
   --help                          Show this message and exit.
 ```
+
+See this help documentation by running:
+
+```shell
+docker run --rm ghcr.io/fact-sealevel/oelsmann24-verticallandmotion:latest --help
+```
+
+## Building the container locally
+
+You can build the container with Docker by cloning the repository locally and then running
+
+```shell
+docker build -t oelsmann24-verticallandmotion .
+```
+
+from the repository root.
+
+## Support
+
+Source code is available online at https://github.com/fact-sealevel/oelsmann24-verticallandmotion. This software is open source, available under the MIT license.
+
+Please file issues in the issue tracker at https://github.com/fact-sealevel/oelsmann24-verticallandmotion/issues.
