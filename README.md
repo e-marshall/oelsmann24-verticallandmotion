@@ -17,6 +17,7 @@ git clone --single-branch --branch package git@github.com:e-marshall/oelsmann24-
 #Download input data
 mkdir -p ./data/input
 curl -sL https://zenodo.org/records/18199757/files/oelsmann24_vlm_data.tar.gz | tar -zx -C ./data/input
+mv ./data/input/data/* ./data/input/ && rmdir ./data/input/data
 
 echo "New_York	12	40.70	-74.01" > ./data/input/location.lst
 
